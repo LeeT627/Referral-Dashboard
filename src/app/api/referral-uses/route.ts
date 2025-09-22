@@ -40,28 +40,28 @@ export async function GET(request: Request) {
       return NextResponse.json({ code, uses: 0, referredEmails: [] });
     }
 
-    // Get all referred users and their emails using the referral code ID
-    const { data: referralsData, error: referralsError } = await supabase
-      .from("referrals")
-      .select("user_profiles(school_email)")
-      .eq("referral_code_id", codeData.id);
+    // Get all users who used this referral code directly from user_profiles
+    const { data: usersData, error: usersError } = await supabase
+      .from("user_profiles")
+      .select("school_email")
+      .eq("referral_code_used", code);
 
-    if (referralsError) {
-      console.error("Error fetching referrals:", referralsError);
+    if (usersError) {
+      console.error("Error fetching users:", usersError);
       return NextResponse.json(
-        { error: referralsError.message },
+        { error: usersError.message },
         { status: 500 }
       );
     }
 
-    // Extract emails from the nested structure
-    const referredEmails = referralsData
-      ? referralsData
-          .map((ref: { user_profiles: { school_email: string | null } | null }) => ref.user_profiles?.school_email)
+    // Extract emails and filter out nulls
+    const referredEmails = usersData
+      ? usersData
+          .map((user: { school_email: string | null }) => user.school_email)
           .filter((email): email is string => !!email)
       : [];
 
-    // Remove duplicates
+    // Remove duplicates (shouldn't be any, but just in case)
     const uniqueEmails = [...new Set(referredEmails)];
 
     const uses = codeData.total_uses || uniqueEmails.length;
