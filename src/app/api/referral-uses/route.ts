@@ -29,6 +29,7 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (codeError) {
+      console.error("Error fetching referral code:", codeError);
       return NextResponse.json(
         { error: codeError.message },
         { status: 500 }
@@ -39,21 +40,50 @@ export async function GET(request: Request) {
       return NextResponse.json({ code, uses: 0, referredEmails: [] });
     }
 
-    // Get all users who used this referral code
-    const { data: usersData, error: usersError } = await supabase
+    // Get all users who used this referral code from user_profiles
+    const { data: userProfilesData, error: userProfilesError } = await supabase
       .from("user_profiles")
-      .select("school_email")
+      .select("school_email, user_id")
       .eq("referral_code_used", code);
 
-    if (usersError) {
+    if (userProfilesError) {
+      console.error("Error fetching user profiles:", userProfilesError);
       return NextResponse.json(
-        { error: usersError.message },
+        { error: userProfilesError.message },
         { status: 500 }
       );
     }
 
-    const referredEmails = usersData?.map((user: { school_email: string | null }) => user.school_email).filter(Boolean) || [];
+    // Also get referred users from the referrals table using the referral_code_id
+    const { data: referralsData, error: referralsError } = await supabase
+      .from("referrals")
+      .select(`
+        referred_user_id,
+        user_profiles!referrals_referred_user_id_fkey(school_email, user_id)
+      `)
+      .eq("referral_code_id", codeData.id);
+
+    if (referralsError) {
+      console.error("Error fetching referrals:", referralsError);
+    }
+
+    // Combine emails from both sources and remove duplicates
+    const emailsFromProfiles = userProfilesData?.map((user: { school_email: string | null }) => user.school_email).filter(Boolean) || [];
+    
+    const emailsFromReferrals = referralsData?.map((referral: { 
+      referred_user_id: string;
+      user_profiles?: { school_email: string | null; user_id: string } 
+    }) => {
+      return referral.user_profiles?.school_email;
+    }).filter(Boolean) || [];
+
+    // Combine and deduplicate emails
+    const allEmails = [...new Set([...emailsFromProfiles, ...emailsFromReferrals])];
+    const referredEmails = allEmails.filter(Boolean);
+    
     const uses = codeData.total_uses || referredEmails.length;
+
+    console.log(`Found ${referredEmails.length} referred emails for code ${code}`);
 
     return NextResponse.json({ code, uses, referredEmails });
   } catch (e: unknown) {
