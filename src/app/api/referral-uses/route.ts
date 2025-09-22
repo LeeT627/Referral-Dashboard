@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const referredEmails = usersData?.map((user: any) => user.school_email).filter(Boolean) || [];
+    const referredEmails = usersData?.map((user: { school_email: string | null }) => user.school_email).filter(Boolean) || [];
     const uses = codeData.total_uses || referredEmails.length;
 
     return NextResponse.json({ code, uses, referredEmails });
