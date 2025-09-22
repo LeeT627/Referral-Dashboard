@@ -3,7 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabaseClient";
 
 /**
  * GET /api/referral-uses?code=YOUR_CODE
- * Returns: { code: string, uses: number }
+ * Returns: { code: string, uses: number, referredEmails: string[] }
  *
  * This uses a read-only anon key. Ensure your RLS allows SELECT on the referral
  * table for anonymous users, or scope policies appropriately.
@@ -18,48 +18,44 @@ export async function GET(request: Request) {
     );
   }
 
-  const table = process.env.REFERRAL_CODES_TABLE || "referral_codes";
-  const codeColumn = process.env.REFERRAL_CODE_COLUMN || "code";
-  const usesColumn = process.env.REFERRAL_USES_COLUMN || "uses";
-  const fallbackColumn = "total_uses"; // try this if `uses` isn't present
-
   try {
     const supabase = getSupabaseServerClient();
 
-    // Select all columns to avoid TS parsing issues with dynamic column lists
-    const { data, error } = await supabase
-      .from(table)
+    // First, get the referral code info
+    const { data: codeData, error: codeError } = await supabase
+      .from("referral_codes")
       .select("*")
-      .eq(codeColumn, code)
+      .eq("code", code)
       .maybeSingle();
 
-    if (error) {
+    if (codeError) {
       return NextResponse.json(
-        { error: error.message },
+        { error: codeError.message },
         { status: 500 }
       );
     }
 
-    if (!data) {
-      return NextResponse.json({ code, uses: 0 });
+    if (!codeData) {
+      return NextResponse.json({ code, uses: 0, referredEmails: [] });
     }
 
-    const row = data as Record<string, unknown>;
+    // Get all users who used this referral code
+    const { data: usersData, error: usersError } = await supabase
+      .from("user_profiles")
+      .select("school_email")
+      .eq("referral_code_used", code);
 
-    const pickNumber = (v: unknown): number => {
-      if (typeof v === "number") return v;
-      if (typeof v === "string") {
-        const n = Number(v);
-        return Number.isFinite(n) ? n : 0;
-      }
-      return 0;
-    };
+    if (usersError) {
+      return NextResponse.json(
+        { error: usersError.message },
+        { status: 500 }
+      );
+    }
 
-    const uses = pickNumber(
-      row[usesColumn] ?? row[fallbackColumn] ?? 0
-    );
+    const referredEmails = usersData?.map((user: any) => user.school_email).filter(Boolean) || [];
+    const uses = codeData.total_uses || referredEmails.length;
 
-    return NextResponse.json({ code, uses });
+    return NextResponse.json({ code, uses, referredEmails });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unexpected error";
     return NextResponse.json(
