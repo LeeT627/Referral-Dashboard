@@ -37,13 +37,18 @@ export async function GET(request: Request) {
     }
 
     if (!codeData) {
-      return NextResponse.json({ code, uses: 0, referredEmails: [] });
+      return NextResponse.json({ 
+        code, 
+        uses: 0, 
+        referredEmails: [],
+        message: "Referral code not found"
+      });
     }
 
     // Get all users who used this referral code directly from user_profiles
     const { data: usersData, error: usersError } = await supabase
       .from("user_profiles")
-      .select("school_email")
+      .select("school_email, user_id")
       .eq("referral_code_used", code);
 
     if (usersError) {
@@ -54,19 +59,58 @@ export async function GET(request: Request) {
       );
     }
 
-    // Extract emails and filter out nulls
-    const referredEmails = usersData
+    // Also try to get referrals from the referrals table using the code ID
+    const { data: referralsData, error: referralsError } = await supabase
+      .from("referrals")
+      .select(`
+        referred_user_id,
+        user_profiles:referred_user_id(school_email)
+      `)
+      .eq("referral_code_id", codeData.id);
+
+    if (referralsError) {
+      console.error("Error fetching from referrals table:", referralsError);
+    }
+
+    // Extract emails from user_profiles table
+    const emailsFromProfiles = usersData
       ? usersData
           .map((user: { school_email: string | null }) => user.school_email)
           .filter((email): email is string => !!email)
       : [];
 
-    // Remove duplicates (shouldn't be any, but just in case)
-    const uniqueEmails = [...new Set(referredEmails)];
+    // Extract emails from referrals table (if any)
+    const emailsFromReferrals: string[] = [];
+    if (referralsData) {
+      for (const referral of referralsData) {
+        const profiles = referral.user_profiles as any;
+        if (Array.isArray(profiles) && profiles[0]?.school_email) {
+          emailsFromReferrals.push(profiles[0].school_email);
+        } else if (profiles?.school_email) {
+          emailsFromReferrals.push(profiles.school_email);
+        }
+      }
+    }
 
-    const uses = codeData.total_uses || uniqueEmails.length;
+    // Combine and deduplicate emails
+    const allEmails = [...new Set([...emailsFromProfiles, ...emailsFromReferrals])];
+    const uniqueEmails = allEmails.filter(Boolean);
 
-    return NextResponse.json({ code, uses, referredEmails: uniqueEmails });
+    // Use total_uses from referral_codes table as the authoritative count
+    const uses = codeData.total_uses || 0;
+
+    // Add debug info if no emails found but uses > 0
+    const debugInfo = uses > 0 && uniqueEmails.length === 0 
+      ? "Note: The referral code shows usage but no user emails are linked in the database. The referral tracking may use a different mechanism."
+      : null;
+
+    return NextResponse.json({ 
+      code, 
+      uses, 
+      referredEmails: uniqueEmails,
+      debugInfo,
+      codeActive: codeData.is_active || false
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unexpected error";
     return NextResponse.json(

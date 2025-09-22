@@ -6,6 +6,9 @@ interface ReferralData {
   code: string;
   uses: number;
   referredEmails: string[];
+  debugInfo?: string | null;
+  codeActive?: boolean;
+  message?: string;
 }
 
 export default function ReferralDashboard() {
@@ -73,11 +76,26 @@ export default function ReferralDashboard() {
             <div>
               <p className="text-sm font-semibold">
                 Referral Code: <span className="text-lg">{data.code}</span>
+                {data.codeActive !== undefined && (
+                  <span className={`ml-2 text-xs px-2 py-1 rounded ${
+                    data.codeActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
+                    {data.codeActive ? 'Active' : 'Inactive'}
+                  </span>
+                )}
               </p>
               <p className="text-sm text-neutral-600">
                 Total uses: {data.uses}
               </p>
             </div>
+            
+            {data.debugInfo && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <p className="text-sm text-yellow-800">
+                  ℹ️ {data.debugInfo}
+                </p>
+              </div>
+            )}
             
             {data.referredEmails.length > 0 && (
               <div>
@@ -97,6 +115,12 @@ export default function ReferralDashboard() {
             {data.referredEmails.length === 0 && data.uses === 0 && (
               <p className="text-sm text-neutral-500 italic">
                 No users have used this referral code yet.
+              </p>
+            )}
+            
+            {data.message && (
+              <p className="text-sm text-neutral-600">
+                {data.message}
               </p>
             )}
           </div>
