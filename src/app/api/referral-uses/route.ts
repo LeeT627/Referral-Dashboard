@@ -5,8 +5,8 @@ import { getSupabaseServerClient } from "@/lib/supabaseClient";
  * GET /api/referral-uses?code=YOUR_CODE
  * Returns: { code: string, uses: number, referredEmails: string[] }
  *
- * This uses a read-only anon key. Ensure your RLS allows SELECT on the referral
- * table for anonymous users, or scope policies appropriately.
+ * This queries the user_profiles table directly to find all users
+ * who have used a specific referral code.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
