@@ -103,7 +103,7 @@ export default function ReferralDashboard() {
                 <div className="bg-neutral-50 rounded-lg p-4 max-h-96 overflow-y-auto">
                   <ul className="space-y-1">
                     {data.referredEmails.map((email, index) => (
-                      <li key={index} className="text-sm py-1 border-b border-neutral-200 last:border-0">
+                      <li key={index} className="text-sm text-neutral-700 py-1 border-b border-neutral-200 last:border-0">
                         {email}
                       </li>
                     ))}
