@@ -83,10 +83,10 @@ export async function GET(request: Request) {
     const emailsFromReferrals: string[] = [];
     if (referralsData) {
       for (const referral of referralsData) {
-        const profiles = referral.user_profiles as any;
+        const profiles = referral.user_profiles as { school_email?: string } | { school_email?: string }[] | null;
         if (Array.isArray(profiles) && profiles[0]?.school_email) {
           emailsFromReferrals.push(profiles[0].school_email);
-        } else if (profiles?.school_email) {
+        } else if (profiles && !Array.isArray(profiles) && profiles.school_email) {
           emailsFromReferrals.push(profiles.school_email);
         }
       }
